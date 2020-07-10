@@ -67,7 +67,9 @@ message Tile {
 
                 // Although this is an "optional" field it is required by the specification.
                 // See https://github.com/mapbox/vector-tile-spec/issues/47
-                optional uint32 extent = 5 [ default = 4096 ];
+                // Note: changed to "required", otherwise quick-protobuf ends up not serializing it
+                // if the default value is used, breaking some vector tile reader implementations.
+                required uint32 extent = 5 [ default = 4096 ];
 
                 extensions 16 to max;
         }
