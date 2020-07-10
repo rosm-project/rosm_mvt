@@ -1,0 +1,11 @@
+[package]
+name = "rosm_mvt"
+version = "0.1.0"
+authors = ["Zsolt Bölöny <bolony.zsolt@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+quick-protobuf = "0.7.0"
+
+[build-dependencies]
+pb-rs = "0.9.0"
