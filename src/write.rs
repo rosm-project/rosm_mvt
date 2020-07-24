@@ -1,15 +1,15 @@
-use super::common::{Value};
+use super::common::Value;
 
 use super::error::{InvalidGeometry, SpecViolation};
 
 use super::proto::vector_tile as pbf;
 use pbf::mod_Tile as pbf_tile;
 
-use quick_protobuf::{Writer, MessageWrite};
+use quick_protobuf::{MessageWrite, Writer};
 
-use std::convert::Into;
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
+use std::convert::Into;
 use std::io::Write;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -42,7 +42,7 @@ impl Tile {
 impl<'a> Into<pbf::Tile<'a>> for Tile {
     fn into(self) -> pbf::Tile<'a> {
         pbf::Tile {
-            layers: self.layers.into_iter().map(|l| l.into()).collect()
+            layers: self.layers.into_iter().map(|l| l.into()).collect(),
         }
     }
 }
@@ -61,7 +61,10 @@ pub struct Layer {
 impl Layer {
     const VERSION: u32 = 2;
 
-    pub fn new<Name>(name: Name, mut features: Vec<Feature>) -> Result<Layer, SpecViolation> where Name: Into<String> {
+    pub fn new<Name>(name: Name, mut features: Vec<Feature>) -> Result<Layer, SpecViolation>
+    where
+        Name: Into<String>,
+    {
         if features.is_empty() {
             Err(SpecViolation::EmptyLayer)
         } else {
@@ -69,7 +72,13 @@ impl Layer {
             let features = Self::encode_features(features)?;
 
             // FIXME: are empty names allowed? Probably not...
-            Ok(Layer { name: name.into(), features, keys, values, extent: 4096 })
+            Ok(Layer {
+                name: name.into(),
+                features,
+                keys,
+                values,
+                extent: 4096,
+            })
         }
     }
 
@@ -87,7 +96,7 @@ impl Layer {
                     Some(idx) => {
                         feature.encoded_tags.push(*idx);
                         *idx
-                    },
+                    }
                     None => {
                         let idx = keys.len() as u32;
                         keys.push(key.clone());
@@ -104,7 +113,7 @@ impl Layer {
                 match values.iter().position(|v| v == value) {
                     Some(idx) => {
                         feature.encoded_tags.push(idx as u32);
-                    },
+                    }
                     None => {
                         let idx = values.len() as u32;
                         values.push(value.clone());
@@ -168,11 +177,14 @@ impl Feature {
             id: None,
             tags: Vec::new(),
             encoded_tags: Vec::new(),
-            geometry
+            geometry,
         }
     }
 
-    pub fn add_tag<Key>(&mut self, key: Key, value: Value) where Key: Into<String> {
+    pub fn add_tag<Key>(&mut self, key: Key, value: Value)
+    where
+        Key: Into<String>,
+    {
         self.tags.push((key.into(), value));
     }
 }
@@ -242,7 +254,7 @@ fn encode_geometry(commands: &[Command]) -> Vec<u32> {
                     ec.push(encode_param(x));
                     ec.push(encode_param(y));
                 }
-                Command::ClosePath => assert!(false)
+                Command::ClosePath => assert!(false),
             }
         }
 
@@ -256,28 +268,32 @@ fn encode_geometry(commands: &[Command]) -> Vec<u32> {
             Command::MoveTo(_) => {
                 match command_buffer.last() {
                     Some(Command::LineTo(_)) => {
-                        flush_command_buffer(&mut command_buffer, &mut encoded_commands); 
-                        start = None; 
-                    },
+                        flush_command_buffer(&mut command_buffer, &mut encoded_commands);
+                        start = None;
+                    }
                     _ => {}
                 }
 
-                if start.is_none() { start = Some(idx); }
+                if start.is_none() {
+                    start = Some(idx);
+                }
                 command_buffer = &commands[start.unwrap()..=idx];
             }
             Command::LineTo(_) => {
                 match command_buffer.last() {
                     Some(Command::MoveTo(_)) => {
                         flush_command_buffer(&mut command_buffer, &mut encoded_commands);
-                        start = None; 
-                    },
+                        start = None;
+                    }
                     _ => {}
                 }
 
-                if start.is_none() { start = Some(idx); }
+                if start.is_none() {
+                    start = Some(idx);
+                }
                 command_buffer = &commands[start.unwrap()..=idx];
             }
-            Command::ClosePath => encoded_commands.push(encode_command(command, 0))
+            Command::ClosePath => encoded_commands.push(encode_command(command, 0)),
         }
     }
 
@@ -338,13 +354,13 @@ fn encode_ring(ring: &[TileCoord], commands: &mut Vec<Command>) -> Result<i32, I
 
     let mut area = 0;
 
-    for i in 0..ring.len()-1 {
+    for i in 0..ring.len() - 1 {
         area += ring[i].0 * ring[i + 1].1;
     }
 
     area += ring.last().unwrap().0 * ring.first().unwrap().1;
 
-    for i in 0..ring.len()-1 {
+    for i in 0..ring.len() - 1 {
         area -= ring[i + 1].0 * ring[i].1;
     }
 
@@ -374,69 +390,69 @@ impl<'a> EncodableGeometry for Geometry<'a> {
         match self {
             Geometry::Point(point) => {
                 let commands = vec![Command::MoveTo(*point)];
-        
+
                 Ok(EncodedGeometry {
                     r#type: pbf_tile::GeomType::POINT,
-                    commands: encode_geometry(&commands)
+                    commands: encode_geometry(&commands),
                 })
-            },
+            }
             Geometry::MultiPoint(points) => {
                 if points.is_empty() {
                     return Err(InvalidGeometry::EmptyPointGeometry);
                 }
-                
+
                 let mut commands = Vec::with_capacity(points.len());
-        
+
                 for point in points.iter() {
                     commands.push(Command::MoveTo(*point));
                 }
-        
+
                 Ok(EncodedGeometry {
                     r#type: pbf_tile::GeomType::POINT,
-                    commands: encode_geometry(&commands)
+                    commands: encode_geometry(&commands),
                 })
-            },
+            }
             Geometry::Line(line) => {
                 if line.is_empty() {
                     return Err(InvalidGeometry::EmptyLineGeometry);
                 }
-        
+
                 let mut commands = Vec::with_capacity(line.len());
-        
+
                 encode_line(line, &mut commands)?;
-        
+
                 Ok(EncodedGeometry {
                     r#type: pbf_tile::GeomType::LINESTRING,
-                    commands: encode_geometry(&commands)
+                    commands: encode_geometry(&commands),
                 })
-            },
+            }
             Geometry::MultiLine(lines) => {
                 if lines.is_empty() {
                     return Err(InvalidGeometry::EmptyLineGeometry);
                 }
 
                 let command_count: usize = lines.iter().map(|line| line.len()).sum();
-        
+
                 let mut commands = Vec::with_capacity(command_count);
-        
+
                 for line in lines.iter() {
                     encode_line(line, &mut commands)?;
                 }
-        
+
                 Ok(EncodedGeometry {
                     r#type: pbf_tile::GeomType::LINESTRING,
-                    commands: encode_geometry(&commands)
+                    commands: encode_geometry(&commands),
                 })
-            },
+            }
             Geometry::Polygon(exterior_ring, interior_rings) => {
                 if exterior_ring.is_empty() {
                     return Err(InvalidGeometry::EmptyPolygonGeometry);
                 }
 
                 let command_count = exterior_ring.len() + interior_rings.iter().map(|ring| ring.len()).sum::<usize>();
-        
+
                 let mut commands = Vec::with_capacity(command_count);
-        
+
                 let area = encode_ring(exterior_ring, &mut commands)?;
 
                 if area.is_negative() {
@@ -452,10 +468,10 @@ impl<'a> EncodableGeometry for Geometry<'a> {
                 }
 
                 // TODO: check intersection/enclosement
-        
+
                 Ok(EncodedGeometry {
                     r#type: pbf_tile::GeomType::POLYGON,
-                    commands: encode_geometry(&commands)
+                    commands: encode_geometry(&commands),
                 })
             }
         }
@@ -465,7 +481,7 @@ impl<'a> EncodableGeometry for Geometry<'a> {
 #[cfg(test)]
 mod mvt_writer_test {
     use super::*;
-    use quick_protobuf::{MessageRead, BytesReader};
+    use quick_protobuf::{BytesReader, MessageRead};
 
     fn create_test_feature() -> Feature {
         let geometry = EncodedGeometry {
@@ -480,15 +496,11 @@ mod mvt_writer_test {
         let mut poi = Feature::new(geometry.encode().unwrap());
         poi.id = Some(1234);
         poi.add_tag("key", Value::Int(123));
-    
-        let features = vec![
-            poi
-        ];
-    
-        let layers = vec![
-            Layer::new("layer", features)?
-        ];
-    
+
+        let features = vec![poi];
+
+        let layers = vec![Layer::new("layer", features)?];
+
         Tile::new(layers)
     }
 
